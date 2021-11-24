@@ -3,6 +3,7 @@
 #include <math.h>
 #include <random>
 #include <utility>
+#include "io.h"
 
 using namespace std;
 
@@ -13,6 +14,7 @@ enum class elTypes {
 	DMDL,
 	ERC,
 	MPCH,
+	CRTR,
 };
 
 class telComSys {
@@ -66,6 +68,7 @@ private:
 					_prob1 ? s.at(i) = 1 : s.at(i) = -1;
 				}
 			}
+			return;
 		}
 	};
 
@@ -84,6 +87,7 @@ private:
 			for (size_t i = 0; i < s.size(); ++i) {
 				s.at(i) += noise(dre);
 			}
+			return;
 		}
 	};
 
@@ -103,6 +107,7 @@ private:
 			for (size_t i = 0; i < _carrier.size(); ++i) {
 				_carrier.at(i) = sin(i * sampInterval * 4 * _Pi);
 			}
+			return;
 		}
 
 		void carriersInitFM(double endTime, double sampInterval) {
@@ -114,6 +119,7 @@ private:
 			for (size_t i = 0; i < _carrier.size(); ++i) {
 				_carrier.at(i) = sin(i * sampInterval * 3 * _Pi);
 			}
+			return;
 		}
 
 		void AM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
@@ -122,6 +128,7 @@ private:
 				s.at(i) += 1;
 				s.at(i) *= 0.5 * _carrier.at(i);
 			}
+			return;
 		}
 
 		void FM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
@@ -131,6 +138,7 @@ private:
 				double tempM = -s.at(i);
 				s.at(i) = tempP * _carrier.at(i) + tempM * _carrier2.at(i);
 			}
+			return;
 		}
 
 		void PM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
@@ -138,6 +146,7 @@ private:
 			for (size_t i = 0; i < s.size(); ++i) {
 				s.at(i) *= _carrier.at(i);
 			}
+			return;
 		}
 
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
@@ -155,6 +164,7 @@ private:
 				throw "Error: invalid modulation type";
 				break;
 			}
+			return;
 		}
 	};
 
@@ -174,6 +184,7 @@ private:
 			for (size_t i = 0; i < _carrier.size(); ++i) {
 				_carrier.at(i) = sin(i * sampInterval * 4 * _Pi);
 			}
+			return;
 		}
 
 		void carriersInitFM(double endTime, double sampInterval) {
@@ -185,27 +196,29 @@ private:
 			for (size_t i = 0; i < _carrier.size(); ++i) {
 				_carrier.at(i) = sin(i * sampInterval * 3 * _Pi);
 			}
+			return;
 		}
 
 		void output(double thresholdLevel, double digTimeSlot, double sampInterval, vector<double>& s) {
 			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
-			for (size_t i = 0; i < s.size(); i += length) {
+			vector<double> temp = s;
+			for (size_t i = 0; i < s.size() - length; i += length) {
 				double sum = -thresholdLevel; //Midpoint Riemann sum is used for integral approximation
 				for (size_t j = 0; j < length; ++j) {
-					if (i + j + 1 <= s.size()) sum += 0.5 * (s.at(i + j) + s.at(i + j + 1)) * sampInterval;
-					else sum += s.at(i + j) * sampInterval;
+					sum += (s.at(i + j) + s.at(i + j + 1)) * sampInterval;
 				}
-				if (sum += 0.5) {
+				if (sum >= 0.5) {
 					for (size_t j = 0; j < length; ++j) {
-						s.at(i + j) = 1;
+						temp.at(i + j + length) = 1;
 					}
 				}
 				else {
 					for (size_t j = 0; j < length; ++j) {
-						s.at(i + j) = -1;
+						temp.at(i + j + length) = -1;
 					}
 				}
 			}
+			s = temp;
 			return;
 		}
 
@@ -251,15 +264,72 @@ private:
 				throw "Error: invalid modulation type";
 				break;
 			}
+			return;
 		}
 	};
 
 	class ERC : public element { //Error counter
+	public:
 
+		unsigned _cnt;
+
+		unsigned _delay; //Delay in digit time slots
+
+		vector<double> _initS;
+
+		ERC(unsigned delay, vector<double> initS): _delay(delay), _cnt(0) {
+			_initS = initS;
+		}
+
+		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
+			_cnt = 0;
+			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
+			for (size_t i = 0; i < s.size() - _delay * length - 1; ++i) {
+				if (s.at(i + _delay * length) != _initS.at(i)) _cnt++; //_initS РёРјРµРµС‚ СЂР°Р·РјРµСЂ 0 РїРѕС‡РµРјСѓ-С‚Рѕ
+			}
+			cout << "Number of errors: " << _cnt << endl;
+			return;
+		}
 	};
 
 	class MPCH : public element { //Multipath channel
+	public:
 
+		unsigned _num; //Number of paths
+
+		vector<vector<double>> _sig;
+
+		MPCH(unsigned num): _num(num) {};
+		
+		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
+			_sig.resize(_num);
+			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
+			for (size_t i = 0; i < _num; ++i) {
+				_sig.at(i).resize(s.size() + i * length);
+				for (size_t j = 0; j < _sig.at(i).size(); ++j) {
+					_sig.at(i).at(j) = 0;
+				}
+				for (size_t j = 0; j < s.size(); ++j) {
+					_sig.at(i).at(j + i * length) = s.at(j);
+				}
+			}
+			for (size_t i = 0; i < s.size(); ++i) {
+				for (size_t j = 0; j < _sig.size(); ++j) {
+					s.at(i) = 0;
+					s.at(i) += _sig.at(j).at(i);
+				}
+			}
+			return;
+		}
+	};
+
+	class CRTR : public element { //Corrector
+	public:
+		char _type;
+
+		unsigned _num; //Number of elements for non-recursive corrector
+
+		CRTR(char type, unsigned num) : _type(type), _num(num) {};
 	};
 
 	vector<pair<element*, elTypes>> _queue; //Queue of elements in the system
@@ -275,20 +345,110 @@ public:
 		return;
 	};
 
-	void appendToQueue(const char* str) { //через пользовательский ввод и enum
-		int elType = -1;
-		vector<double> param;
-		while (*str != '\0') {
-			str++;
+	void initAWNG() {
+		return;
+	}
+
+	void initCRTR() {
+		return;
+	}
+
+	void initDMDL() {
+		int t = read_int("Choose modulation type (for demodulator):\n1. Amplitude\n2. Phase\n3. Frequency\n", 1, 3);
+		char c = 0;
+		switch (t) {
+		case 1:
+			c = 'A';
+			break;
+		case 2:
+			c = 'P';
+			break;
+		case 3:
+			c = 'F';
+			break;
+		default:
+			throw "Error: invalid modulation type";
 		}
-		RTSG gen(0.5);
-		_queue.push_back(pair<element*, elTypes>(&gen, elTypes::RTSG));
+		DMDL* ptr = new DMDL(c);
+		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::DMDL));
+		return;
+	}
+
+	void initERC() {
+		_queue.push_back(pair<element*, elTypes>(nullptr, elTypes::ERC));
+		return;
+	}
+
+	void initMDL() {
+		int t = read_int("Choose modulation type:\n1. Amplitude\n2. Phase\n3. Frequency\n", 1, 3);
+		char c = 0;
+		switch (t) {
+		case 1:
+			c = 'A';
+			break;
+		case 2:
+			c = 'P';
+			break;
+		case 3:
+			c = 'F';
+			break;
+		default:
+			throw "Error: invalid modulation type";
+		}
+		MDL* ptr = new MDL(c);
+		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::MDL));
+		return;
+	}
+
+	void initMPCH() {
+		return;
+	}
+
+	void initRTSG() {
+		double p = read_double("Enter probability of '1': ", 0., 1.);
+		RTSG* ptr = new RTSG(p);
+		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::RTSG));
+		return;
+	}
+
+	void appendToQueue(elTypes type) { //С‡РµСЂРµР· РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёР№ РІРІРѕРґ Рё enum
+		switch (type) {
+		case elTypes::AWNG:
+
+			break;
+		case elTypes::CRTR:
+
+			break;
+		case elTypes::DMDL:
+			initDMDL();
+			break;
+		case elTypes::ERC:
+			initERC();
+			break;
+		case elTypes::MDL:
+			initMDL();
+			break;
+		case elTypes::MPCH:
+
+			break;
+		case elTypes::RTSG:
+			initRTSG();
+			break;
+		default:
+			throw "Error: invalid element type";
+			break;
+		}
+		return;
 	}
 
 	void run() {
-		for (auto i : _queue) {
-			i.first->runEl(_endTime, _digTimeSlot, _sampInterval, _s);
-			if (i.second == elTypes::RTSG) _initS = _s; //сделать как статический элемент класса счетчика ошибок?
+		for (size_t i = 0; i < _queue.size(); ++i) {
+			if (_queue.at(i).second == elTypes::ERC) {
+				ERC* ptr = new ERC(1, _initS);
+				_queue.at(i).first = ptr;
+			}
+			_queue.at(i).first->runEl(_endTime, _digTimeSlot, _sampInterval, _s);
+			if (_queue.at(i).second == elTypes::RTSG) _initS = _s; //СЃРґРµР»Р°С‚СЊ РєР°Рє СЃС‚Р°С‚РёС‡РµСЃРєРёР№ СЌР»РµРјРµРЅС‚ РєР»Р°СЃСЃР° СЃС‡РµС‚С‡РёРєР° РѕС€РёР±РѕРє?
 		}
 	}
 
@@ -302,7 +462,10 @@ public:
 
 int main() {
 	telComSys t(30, 1, 0.1);
-	t.appendToQueue("11");
+	t.appendToQueue(elTypes::RTSG);
+	t.appendToQueue(elTypes::MDL);
+	t.appendToQueue(elTypes::DMDL);
+	t.appendToQueue(elTypes::ERC);
 	t.printSignal();
 	t.run();
 	t.printSignal();
