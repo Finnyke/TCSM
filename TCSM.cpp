@@ -7,9 +7,11 @@
 
 using namespace std;
 
+
+
 enum class elTypes {
 	RTSG,
-	AWNG,
+	AWGNG,
 	MDL,
 	DMDL,
 	ERC,
@@ -20,7 +22,7 @@ enum class elTypes {
 class telComSys {
 private:
 
-	double _endTime; //Modelling end time
+	double _endTime; //Modeling end time
 
 	double _digTimeSlot; //Digit time slot / Clock interval
 
@@ -31,6 +33,8 @@ private:
 	vector<double> _initS; //A copy of initial signal
 
 	vector<bool> _oscilFlags; //Flags for oscilloscope usage
+
+	vector<double> _gammas; //Weight coefficients for multipath channel
 
 	class element {
 	public:
@@ -57,7 +61,6 @@ private:
 				for (size_t i = 0; i < s.size(); i += length) {
 					double r = round(((double)rand() / (RAND_MAX)) - 0.5 + _prob1);
 					if (!r) r = -1;
-					cout << i << '\t' << r << endl;
 					for (size_t j = 0; j < length; ++j) {
 						s.at(i + j) = r;
 					}
@@ -80,6 +83,7 @@ private:
 		AWGNG(double sigma) : _deviation(sigma) {};
 
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
+			if (_deviation == 0) return;
 			srand(time(0));
 			unsigned seed = static_cast<unsigned>(rand());
 			default_random_engine dre(seed);
@@ -287,7 +291,7 @@ private:
 			for (size_t i = 0; i < s.size() - _delay * length - 1; ++i) {
 				if (s.at(i + _delay * length) != _initS.at(i)) _cnt++; //_initS имеет размер 0 почему-то
 			}
-			cout << "Number of errors: " << _cnt << endl;
+			cout << "Number of errors: " << _cnt / length << endl;
 			return;
 		}
 	};
@@ -299,24 +303,34 @@ private:
 
 		vector<vector<double>> _sig;
 
-		MPCH(unsigned num): _num(num) {};
+		vector<double> _gammas;
+
+		MPCH(unsigned num, vector<double> coeffs): _num(num) {
+			if (_num > coeffs.size()) throw "Error: insufficient number of coefficients";
+			if (_num < coeffs.size()) throw "Error: excessive number of coefficients";
+			_gammas = coeffs;
+		};
 		
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
 			_sig.resize(_num);
 			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
 			for (size_t i = 0; i < _num; ++i) {
 				_sig.at(i).resize(s.size() + i * length);
+			}
+			for (size_t i = 0; i < _num; ++i) {
 				for (size_t j = 0; j < _sig.at(i).size(); ++j) {
 					_sig.at(i).at(j) = 0;
 				}
+			}
+			for (size_t i = 0; i < _num; ++i) {
 				for (size_t j = 0; j < s.size(); ++j) {
 					_sig.at(i).at(j + i * length) = s.at(j);
 				}
 			}
 			for (size_t i = 0; i < s.size(); ++i) {
+				s.at(i) = 0;
 				for (size_t j = 0; j < _sig.size(); ++j) {
-					s.at(i) = 0;
-					s.at(i) += _sig.at(j).at(i);
+					s.at(i) += _sig.at(j).at(i) * _gammas.at(j);
 				}
 			}
 			return;
@@ -329,7 +343,38 @@ private:
 
 		unsigned _num; //Number of elements for non-recursive corrector
 
-		CRTR(char type, unsigned num) : _type(type), _num(num) {};
+		vector<vector<double>> _sig;
+
+		vector<double> _gammas;
+
+		CRTR(char type, unsigned num, vector<double> coeffs) : _type(type), _num(num) {
+			if (_num > coeffs.size()) throw "Error: insufficient number of coefficients";
+			if (_num < coeffs.size()) throw "Error: excessive number of coefficients";
+			_gammas = coeffs;
+		};
+
+		void recCRTR(size_t length, vector<double>& s, double val = 0, unsigned depth = 0) {
+			if (depth * length >= s.size()) return;
+			double temp = val;
+			val = s.at(depth * length) - _gammas.at(1) * val / _gammas.at(0); // vector<double> _gammas; vector<double> _gammas; vector<double> _gammas;
+			for (size_t i = 0; i < length; ++i) {
+				s.at(depth * length + i) -= temp;
+			}
+			depth++;
+			recCRTR(length, s, val, depth);
+		}
+
+		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
+			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
+			if (_type == 'R') {
+				recCRTR(length, s);
+			}
+			else {
+				_sig.resize(_num);
+			}
+			return;
+		}
+
 	};
 
 	vector<pair<element*, elTypes>> _queue; //Queue of elements in the system
@@ -340,16 +385,24 @@ public:
 		//must be bigger than zero
 		//must be a multiple
 		if (digTimeSlot < sampInterval) throw "Error: digit time slot must be bigger than sample interval";
+		if (endTime < digTimeSlot) throw "Error: modeling end time must be bigger than digit time slot";
 		//if (digTimeSlot / sampInterval) throw "Error: digit time slot must be bigger than sample interval";
 		_s.resize(static_cast<size_t>(endTime / sampInterval));
 		return;
-	};
+	}
 
 	void initAWNG() {
+		double sigma = read_double("Enter noise deviation: ", 0., 500.);
+		AWGNG* ptr = new AWGNG(sigma);
+		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::AWGNG));
 		return;
 	}
 
-	void initCRTR() {
+	void initCRTR() { //Весовые коэффициенты в канале
+		unsigned n = static_cast<unsigned>(read_int("Enter the number of paths (for unrecursive corrector): ", 1, 10));
+		vector<double> coeffs = { 1, 1 };
+		CRTR* ptr = new CRTR('R', n, coeffs);
+		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::CRTR));
 		return;
 	}
 
@@ -401,6 +454,10 @@ public:
 	}
 
 	void initMPCH() {
+		unsigned n = static_cast<unsigned>(read_int("Enter the number of paths: ", 1, 10));
+		vector<double> coeffs = { 1, 1 };
+		MPCH* ptr = new MPCH(n, coeffs); //Весовые коэффициенты, setWeights()
+		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::MPCH));
 		return;
 	}
 
@@ -410,14 +467,14 @@ public:
 		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::RTSG));
 		return;
 	}
-
-	void appendToQueue(elTypes type) { //через пользовательский ввод и enum
+	
+	void appendToQueue(elTypes type) {
 		switch (type) {
-		case elTypes::AWNG:
-
+		case elTypes::AWGNG:
+			initAWNG();
 			break;
 		case elTypes::CRTR:
-
+			initCRTR();
 			break;
 		case elTypes::DMDL:
 			initDMDL();
@@ -429,7 +486,7 @@ public:
 			initMDL();
 			break;
 		case elTypes::MPCH:
-
+			initMPCH();
 			break;
 		case elTypes::RTSG:
 			initRTSG();
@@ -444,11 +501,12 @@ public:
 	void run() {
 		for (size_t i = 0; i < _queue.size(); ++i) {
 			if (_queue.at(i).second == elTypes::ERC) {
-				ERC* ptr = new ERC(1, _initS);
-				_queue.at(i).first = ptr;
+				unsigned u = static_cast<unsigned>(read_int("Enter system's overall delay: ", 0, static_cast<int>(_endTime / _digTimeSlot)));
+				_queue.at(i).first = new ERC(u, _initS);
 			}
 			_queue.at(i).first->runEl(_endTime, _digTimeSlot, _sampInterval, _s);
 			if (_queue.at(i).second == elTypes::RTSG) _initS = _s; //сделать как статический элемент класса счетчика ошибок?
+			if (_queue.at(i).second == elTypes::RTSG) printSignal();
 		}
 	}
 
@@ -461,14 +519,25 @@ public:
 };
 
 int main() {
-	telComSys t(30, 1, 0.1);
-	t.appendToQueue(elTypes::RTSG);
-	t.appendToQueue(elTypes::MDL);
-	t.appendToQueue(elTypes::DMDL);
-	t.appendToQueue(elTypes::ERC);
-	t.printSignal();
-	t.run();
-	t.printSignal();
+	try {
+		telComSys t(30, 1, 0.1);
+		t.appendToQueue(elTypes::RTSG);
+		//t.appendToQueue(elTypes::MPCH);
+		//t.appendToQueue(elTypes::CRTR);
+		//t.appendToQueue(elTypes::MDL);
+		//t.appendToQueue(elTypes::AWGNG);
+		//t.appendToQueue(elTypes::DMDL);
+		t.appendToQueue(elTypes::ERC);
+		t.run();
+		t.printSignal();
+	}
+	catch (const char* str) {
+		cout << "Runtime error:" << endl;
+		while (*str) {
+			cout << *str;
+			str++;
+		}
+	}
 
 	return 0;
 }
