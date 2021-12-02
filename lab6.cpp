@@ -7,7 +7,6 @@ int main() {
 		t.appendToQueue(elTypes::MPCH);
 		t.appendToQueue(elTypes::AWGNG);
 		t.appendToQueue(elTypes::CRTR);
-		//t.appendToQueue(elTypes::MDL);
 		t.appendToQueue(elTypes::DMDL);
 		t.appendToQueue(elTypes::ERC);
 		t.run();
