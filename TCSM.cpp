@@ -1,6 +1,6 @@
 #include <iostream>
 #include <vector>
-#include <math.h>
+#include <cmath>
 #include <random>
 #include <utility>
 #include "io.h"
@@ -253,6 +253,11 @@ private:
 			return;
 		}
 
+		void pM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
+			output(0., digTimeSlot, sampInterval, s);
+			return;
+		}
+
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
 			switch (_type) {
 			case'A':
@@ -263,6 +268,9 @@ private:
 				break;
 			case'P':
 				PM(endTime, digTimeSlot, sampInterval, s);
+				break;
+			case'p':
+				pM(endTime, digTimeSlot, sampInterval, s);
 				break;
 			default:
 				throw "Error: invalid modulation type";
@@ -288,8 +296,8 @@ private:
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
 			_cnt = 0;
 			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
-			for (size_t i = 0; i < s.size() - _delay * length - 1; ++i) {
-				if (s.at(i + _delay * length) != _initS.at(i)) _cnt++; //_initS имеет размер 0 почему-то
+			for (size_t i = 0; i < s.size() - _delay * length; ++i) {
+				if (s.at(i + _delay * length) != _initS.at(i)) _cnt++;
 			}
 			cout << "Number of errors: " << _cnt / length << endl;
 			return;
@@ -316,10 +324,8 @@ private:
 			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
 			for (size_t i = 0; i < _num; ++i) {
 				_sig.at(i).resize(s.size() + i * length);
-			}
-			for (size_t i = 0; i < _num; ++i) {
-				for (size_t j = 0; j < _sig.at(i).size(); ++j) {
-					_sig.at(i).at(j) = 0;
+				for (auto j : _sig.at(i)) {
+					j = 0;
 				}
 			}
 			for (size_t i = 0; i < _num; ++i) {
@@ -348,33 +354,50 @@ private:
 		vector<double> _gammas;
 
 		CRTR(char type, unsigned num, vector<double> coeffs) : _type(type), _num(num) {
-			if (_num > coeffs.size()) throw "Error: insufficient number of coefficients";
-			if (_num < coeffs.size()) throw "Error: excessive number of coefficients";
 			_gammas = coeffs;
 		};
 
 		void recCRTR(size_t length, vector<double>& s, double val = 0, unsigned depth = 0) {
 			if (depth * length >= s.size()) return;
 			double temp = val;
-			val = s.at(depth * length) - _gammas.at(1) * val / _gammas.at(0); // vector<double> _gammas; vector<double> _gammas; vector<double> _gammas;
+			val += s.at(depth * length);
+			val *= - (_gammas.at(1) / _gammas.at(0));
 			for (size_t i = 0; i < length; ++i) {
-				s.at(depth * length + i) -= temp;
+				s.at(depth * length + i) += temp;
+				s.at(depth * length + i) /= _gammas.at(0);
 			}
 			depth++;
 			recCRTR(length, s, val, depth);
 		}
 
-		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
-			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
-			if (_type == 'R') {
-				recCRTR(length, s);
+		void nrCRTR(size_t length, vector<double> &s) {
+			_sig.resize(_num + 1);
+			for (size_t i = 0; i <= _num; ++i) {
+				_sig.at(i).resize(s.size() + i * length);
+				for (auto j : _sig.at(i)) {
+					j = 0;
+				}
 			}
-			else {
-				_sig.resize(_num);
+			double k = _gammas.at(0) / _gammas.at(1);
+			for (size_t i = 0; i <= _num; ++i) {
+				for (size_t j = 0; j < s.size(); ++j) {
+					_sig.at(i).at(j + i * length) += s.at(j) * pow((-k), _num - i);
+				}
+			}
+			for (size_t i = 0; i < s.size(); ++i) {
+				s.at(i) = 0;
+				for (size_t j = 0; j < _sig.size(); ++j) {
+					s.at(i) += _sig.at(j).at(i) / _gammas.at(1);
+				}
 			}
 			return;
 		}
 
+		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
+			size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
+			_type == 'R' ? recCRTR(length, s) : nrCRTR(length, s);
+			return;
+		}
 	};
 
 	vector<pair<element*, elTypes>> _queue; //Queue of elements in the system
@@ -398,16 +421,27 @@ public:
 		return;
 	}
 
-	void initCRTR() { //Весовые коэффициенты в канале
-		unsigned n = static_cast<unsigned>(read_int("Enter the number of paths (for unrecursive corrector): ", 1, 10));
-		vector<double> coeffs = { 1, 1 };
-		CRTR* ptr = new CRTR('R', n, coeffs);
+	void initCRTR() {
+		int t = read_int("Choose corrector type:\n1. Recursive\n2. Non-recursive\n", 1, 2);
+		char c;
+		unsigned n = 0;
+		if (t == 2) {
+			n = static_cast<unsigned>(read_int("Enter the number of elements (for non-recursive corrector): ", 1, 40));
+			c = 'N';
+		}
+		else c = 'R';
+		vector<double> coeffs;
+		for (auto i = 2; i > 0; --i) {
+			cout << "Enter coefficient for path " << 2 - i + 1 << ": ";
+			coeffs.push_back(read_double("", -15, +15));
+		}
+		CRTR* ptr = new CRTR(c, n, coeffs);
 		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::CRTR));
 		return;
 	}
 
 	void initDMDL() {
-		int t = read_int("Choose modulation type (for demodulator):\n1. Amplitude\n2. Phase\n3. Frequency\n", 1, 3);
+		int t = read_int("Choose modulation type (for demodulator):\n1. Amplitude\n2. Phase\n3. Frequency\n4. Phase (low frequency)\n", 1, 4);
 		char c = 0;
 		switch (t) {
 		case 1:
@@ -418,6 +452,9 @@ public:
 			break;
 		case 3:
 			c = 'F';
+			break;
+		case 4:
+			c = 'p';
 			break;
 		default:
 			throw "Error: invalid modulation type";
@@ -454,9 +491,13 @@ public:
 	}
 
 	void initMPCH() {
-		unsigned n = static_cast<unsigned>(read_int("Enter the number of paths: ", 1, 10));
-		vector<double> coeffs = { 1, 1 };
-		MPCH* ptr = new MPCH(n, coeffs); //Весовые коэффициенты, setWeights()
+		unsigned n = static_cast<unsigned>(read_int("Enter the number of paths: ", 2, 3));
+		vector<double> coeffs;
+		for (auto i = n; i > 0; --i) {
+			cout << "Enter coefficient for path " << n - i + 1 << ": ";
+			coeffs.push_back(read_double("", -15, +15));
+		}
+		MPCH* ptr = new MPCH(n, coeffs);
 		_queue.push_back(pair<element*, elTypes>(ptr, elTypes::MPCH));
 		return;
 	}
@@ -522,21 +563,18 @@ int main() {
 	try {
 		telComSys t(30, 1, 0.1);
 		t.appendToQueue(elTypes::RTSG);
-		//t.appendToQueue(elTypes::MPCH);
-		//t.appendToQueue(elTypes::CRTR);
+		t.appendToQueue(elTypes::MPCH);
+		t.appendToQueue(elTypes::AWGNG);
+		t.appendToQueue(elTypes::CRTR);
 		//t.appendToQueue(elTypes::MDL);
-		//t.appendToQueue(elTypes::AWGNG);
-		//t.appendToQueue(elTypes::DMDL);
+		t.appendToQueue(elTypes::DMDL);
 		t.appendToQueue(elTypes::ERC);
 		t.run();
 		t.printSignal();
 	}
 	catch (const char* str) {
 		cout << "Runtime error:" << endl;
-		while (*str) {
-			cout << *str;
-			str++;
-		}
+		cout << str << endl;
 	}
 
 	return 0;
