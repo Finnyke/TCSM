@@ -9,7 +9,7 @@ telComSys::RTSG::RTSG(double prob1) {
 }
 
 void telComSys::RTSG::runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
-	size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
+	size_t length = static_cast<size_t>(digTimeSlot / sampInterval); //length of each digit time slot in sample intervals
 	if (_prob1 < 1 && _prob1 > 0) {
 		for (size_t i = 0; i < s.size(); i += length) {
 			double r = round(((double)rand() / (RAND_MAX)) - 0.5 + _prob1);
@@ -218,7 +218,7 @@ void telComSys::ERC::runEl(double endTime, double digTimeSlot, double sampInterv
 	for (size_t i = 0; i < s.size() - _delay * length; ++i) {
 		if (s.at(i + _delay * length) != _initS.at(i)) _cnt++;
 	}
-	cout << "Number of errors: " << _cnt / length << endl;
+	cout << "Number of errors: " << _cnt / length << endl; //Since counter is incremented for each sample interval we need to divide it by length
 	return;
 }
 
@@ -230,20 +230,20 @@ void telComSys::MPCH::runEl(double endTime, double digTimeSlot, double sampInter
 	_sig.resize(_num);
 	size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
 	for (size_t i = 0; i < _num; ++i) {
-		_sig.at(i).resize(s.size() + i * length);
+		_sig.at(i).resize(s.size() + i * length); //Initializing each path signal with zeros
 		for (auto j : _sig.at(i)) {
 			j = 0;
 		}
 	}
 	for (size_t i = 0; i < _num; ++i) {
 		for (size_t j = 0; j < s.size(); ++j) {
-			_sig.at(i).at(j + i * length) = s.at(j);
+			_sig.at(i).at(j + i * length) = s.at(j); //Filling each path signal considering the delay
 		}
 	}
 	for (size_t i = 0; i < s.size(); ++i) {
 		s.at(i) = 0;
 		for (size_t j = 0; j < _sig.size(); ++j) {
-			s.at(i) += _sig.at(j).at(i) * _gammas.at(j);
+			s.at(i) += _sig.at(j).at(i) * _gammas.at(j); //Getting the resulting signal considering the coefficients of each path
 		}
 	}
 	return;
@@ -257,7 +257,7 @@ telComSys::CRTR::CRTR(char type, unsigned num, vector<double> coeffs) : _type(ty
 void telComSys::CRTR::recCRTR(size_t length, vector<double>& s, double val, unsigned depth) {
 	if (depth * length >= s.size()) return;
 	double temp = val;
-	val += s.at(depth * length);
+	val += s.at(depth * length); //Val represents the current value in corrector
 	val *= -(_gammas.at(1) / _gammas.at(0));
 	for (size_t i = 0; i < length; ++i) {
 		s.at(depth * length + i) += temp;
