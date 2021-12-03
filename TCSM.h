@@ -65,15 +65,15 @@ private:
 
 		char _type; //Modulation type
 
-		vector<double> _carrier; //Carrier signals for different modulation types
+		vector<double> _carrier; //Carrier signal
 
-		vector<double> _carrier2;
+		vector<double> _carrier2; //Second carrier signal for FM
 
 		MDL(char type);
 
-		void carrierInit(double endTime, double sampInterval); //Initialization of the carrier signal for AM and PH
+		void carrierInit(double endTime, double sampInterval); //Initialization of the carrier signal
 
-		void carriersInitFM(double endTime, double sampInterval); //Initialization of the carrier signal for FM
+		void carriersInitFM(double endTime, double sampInterval); //Initialization of the second carrier signal for FM
 
 		void AM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s); //Modulation functions for corresponding modulation types
 
