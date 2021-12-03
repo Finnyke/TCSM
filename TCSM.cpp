@@ -59,7 +59,7 @@ void telComSys::MDL::carriersInitFM(double endTime, double sampInterval) {
 	}
 	_carrier2.resize(static_cast<size_t>(endTime / sampInterval));
 	for (size_t i = 0; i < _carrier.size(); ++i) {
-		_carrier.at(i) = sin(i * sampInterval * 3 * _Pi);
+		_carrier2.at(i) = sin(i * sampInterval * 3 * _Pi);
 	}
 	return;
 }
@@ -126,7 +126,7 @@ void telComSys::DMDL::carriersInitFM(double endTime, double sampInterval) {
 	}
 	_carrier2.resize(static_cast<size_t>(endTime / sampInterval));
 	for (size_t i = 0; i < _carrier.size(); ++i) {
-		_carrier.at(i) = sin(i * sampInterval * 3 * _Pi);
+		_carrier2.at(i) = sin(i * sampInterval * 3 * _Pi);
 	}
 	return;
 }
