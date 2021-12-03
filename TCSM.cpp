@@ -223,8 +223,6 @@ void telComSys::ERC::runEl(double endTime, double digTimeSlot, double sampInterv
 }
 
 telComSys::MPCH::MPCH(unsigned num, vector<double> coeffs) : _num(num) {
-	if (_num > coeffs.size()) throw "Error: insufficient number of coefficients";
-	if (_num < coeffs.size()) throw "Error: excessive number of coefficients";
 	_gammas = coeffs;
 };
 
