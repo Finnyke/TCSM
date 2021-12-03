@@ -9,7 +9,6 @@ telComSys::RTSG::RTSG(double prob1) {
 }
 
 void telComSys::RTSG::runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
-	srand(time(0));
 	size_t length = static_cast<size_t>(digTimeSlot / sampInterval);
 	if (_prob1 < 1 && _prob1 > 0) {
 		for (size_t i = 0; i < s.size(); i += length) {
@@ -33,7 +32,6 @@ telComSys::AWGNG::AWGNG(double sigma) : _deviation(sigma) {};
 
 void telComSys::AWGNG::runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) {
 	if (_deviation == 0) return;
-	srand(time(0));
 	unsigned seed = static_cast<unsigned>(rand());
 	default_random_engine dre(seed);
 	normal_distribution<double> noise(0, _deviation);
@@ -225,6 +223,8 @@ void telComSys::ERC::runEl(double endTime, double digTimeSlot, double sampInterv
 }
 
 telComSys::MPCH::MPCH(unsigned num, vector<double> coeffs) : _num(num) {
+	if (_num > coeffs.size()) throw "Error: insufficient number of coefficients";
+	if (_num < coeffs.size()) throw "Error: excessive number of coefficients";
 	_gammas = coeffs;
 };
 
@@ -298,12 +298,23 @@ void telComSys::CRTR::runEl(double endTime, double digTimeSlot, double sampInter
 	return;
 }
 
+bool telComSys::cmpd(double lhs, double rhs) {
+	return (abs(lhs - rhs) < 0.000001);
+}
+
+bool telComSys::checkForMltpl(double x, double y) {
+	if (x < y) return false;
+	x -= y;
+	if (cmpd(x, y)) return true;
+	else checkForMltpl(x, y);
+}
+	
+
 telComSys::telComSys(double endTime, double digTimeSlot, double sampInterval) : _endTime(endTime), _digTimeSlot(digTimeSlot), _sampInterval(sampInterval) {
-	//must be bigger than zero
-	//must be a multiple
-	if (digTimeSlot < sampInterval) throw "Error: digit time slot must be bigger than sample interval";
-	if (endTime < digTimeSlot) throw "Error: modeling end time must be bigger than digit time slot";
-	//if (digTimeSlot / sampInterval) throw "Error: digit time slot must be bigger than sample interval";
+	if (endTime <= 0 || digTimeSlot <= 0 || sampInterval <= 0) throw "Error: all parameters must be positive";
+	if (!checkForMltpl(endTime, digTimeSlot)) throw "Error: modeling end time must be a multiple of digit time slot";
+	if (!checkForMltpl(digTimeSlot, sampInterval)) throw "Error: digit time slot must be a multiple of sample interval";
+	srand(static_cast<unsigned>(time(nullptr)));
 	_s.resize(static_cast<size_t>(endTime / sampInterval));
 	return;
 }
