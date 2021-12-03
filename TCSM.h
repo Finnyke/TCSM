@@ -8,7 +8,7 @@
 
 using namespace std;
 
-enum class elTypes {
+enum class elTypes { //Types of available elements
 	RTSG,
 	AWGNG,
 	MDL,
@@ -21,63 +21,61 @@ enum class elTypes {
 class telComSys {
 private:
 
-	double _endTime;
+	double _endTime; //Modeling end time
 
-	double _digTimeSlot;
+	double _digTimeSlot; //Digit time slot
 
-	double _sampInterval;
+	double _sampInterval; //Smaple interval
 
-	vector<double> _s;
+	vector<double> _s; //Main signal
 
-	vector<double> _initS;
+	vector<double> _initS; //Initial signal (after RTSG)
 
-	vector<bool> _oscilFlags;
-
-	vector<double> _gammas;
+	vector<double> _gammas; //Coefficients for multipath channel
 
 	class element {
 	public:
 
-		virtual void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) = 0;
+		virtual void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s) = 0; //Function which models change to the main signal
 
 	};
 
-	class RTSG : public element {
+	class RTSG : public element { //Random telegraph signal generator
 	public:
 
-		double _prob1;
+		double _prob1; //Probability of 1
 
 		RTSG(double prob1);
 
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 	};
 
-	class AWGNG : public element {
+	class AWGNG : public element { //Additive white gaussian noise generator
 	public:
 
-		double _deviation;
+		double _deviation; //Standard deviation of gaussian noise
 
 		AWGNG(double sigma);
 
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 	};
 
-	class MDL : public element {
+	class MDL : public element { //Modulator
 	public:
 
-		char _type;
+		char _type; //Modulation type
 
-		vector<double> _carrier;
+		vector<double> _carrier; //Carrier signals for different modulation types
 
 		vector<double> _carrier2;
 
 		MDL(char type);
 
-		void carrierInit(double endTime, double sampInterval);
+		void carrierInit(double endTime, double sampInterval); //Initialization of the carrier signal for AM and PH
 
-		void carriersInitFM(double endTime, double sampInterval);
+		void carriersInitFM(double endTime, double sampInterval); //Initialization of the carrier signal for FM
 
-		void AM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
+		void AM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s); //Modulation functions for corresponding modulation types
 
 		void FM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 
@@ -86,22 +84,22 @@ private:
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 	};
 
-	class DMDL : public element {
+	class DMDL : public element { //Demodulator
 	public:
 
-		char _type;
+		char _type; //Modulation type
 
-		vector<double> _carrier;
+		vector<double> _carrier; //Carrier signals for different modulation types
 
 		vector<double> _carrier2;
 
 		DMDL(char type);
 
-		void carrierInit(double endTime, double sampInterval);
+		void carrierInit(double endTime, double sampInterval); //Initialization of the carrier signal for AM and PH
 
-		void carriersInitFM(double endTime, double sampInterval);
+		void carriersInitFM(double endTime, double sampInterval); //Initialization of the carrier signal for FM
 
-		void output(double thresholdLevel, double digTimeSlot, double sampInterval, vector<double>& s);
+		void output(double thresholdLevel, double digTimeSlot, double sampInterval, vector<double>& s); //Integrator and decision-making device
 
 		void AM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 
@@ -109,49 +107,49 @@ private:
 
 		void PM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 
-		void pM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
+		void pM(double endTime, double digTimeSlot, double sampInterval, vector<double>& s); //Low-frequency phase modulation
 
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 	};
 
-	class ERC : public element {
+	class ERC : public element { //Error counter
 	public:
 
-		unsigned _cnt;
+		unsigned _cnt; //Counter itself
 
-		unsigned _delay;
+		unsigned _delay; //Total delay in the system, in digit time slots
 
-		vector<double> _initS;
+		vector<double> _initS; //Initial signal (after RTSG)
 
 		ERC(unsigned delay, vector<double> initS);
 
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 	};
 
-	class MPCH : public element {
+	class MPCH : public element { //Mutipath channel
 	public:
 
-		unsigned _num;
+		unsigned _num; //Number of paths
 
-		vector<vector<double>> _sig;
+		vector<vector<double>> _sig; //Signals on each path
 
-		vector<double> _gammas;
+		vector<double> _gammas; //Coefficients
 
 		MPCH(unsigned num, vector<double> coeffs);
 
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 	};
 
-	class CRTR : public element {
+	class CRTR : public element { //Corrector
 	public:
 
-		char _type;
+		char _type; //Corrector type
 
-		unsigned _num;
+		unsigned _num; //Number of elements in non-recursive corrector
 
-		vector<vector<double>> _sig;
+		vector<vector<double>> _sig; //Signals on each branch of non-recursive corrector
 
-		vector<double> _gammas;
+		vector<double> _gammas; //Coefficients
 
 		CRTR(char type, unsigned num, vector<double> coeffs);
 
@@ -162,13 +160,13 @@ private:
 		void runEl(double endTime, double digTimeSlot, double sampInterval, vector<double>& s);
 	};
 
-	vector<pair<element*, elTypes>> _queue;
+	vector<pair<element*, elTypes>> _queue; //Queue of the elements in the system
 
 public:
 
-	bool cmpd(double lhs, double rhs);
+	bool cmpd(double lhs, double rhs); //Floating point values comparison
 
-	bool checkForMltpl(double x, double y);
+	bool checkForMltpl(double x, double y); //Checks if x is a multiple of y
 
 	telComSys(double endTime, double digTimeSlot, double sampInterval);
 
