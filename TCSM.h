@@ -166,6 +166,10 @@ private:
 
 public:
 
+	bool cmpd(double lhs, double rhs);
+
+	bool checkForMltpl(double x, double y);
+
 	telComSys(double endTime, double digTimeSlot, double sampInterval);
 
 	void initAWNG();
