@@ -25,7 +25,7 @@ private:
 
 	double _digTimeSlot; //Digit time slot
 
-	double _sampInterval; //Smaple interval
+	double _sampInterval; //Sample interval
 
 	vector<double> _s; //Main signal
 
